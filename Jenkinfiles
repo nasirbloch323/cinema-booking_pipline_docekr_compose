@@ -1,0 +1,84 @@
+pipeline {
+    agent any
+
+    environment {
+        IMAGE_NAME = "cinema-app"
+        COMPOSE_FILE = "docker-compose.yml"
+    }
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                echo "Cloning repository..."
+                git branch: 'main',
+                    url: 'https://github.com/nasirbloch323/cinema-booking_pipline_docekr_compose.git'
+            }
+        }
+
+        stage('Build & Test (Maven)') {
+            steps {
+                echo "Building and testing application..."
+                sh '''
+                    chmod +x mvnw
+                    ./mvnw clean package -DskipTests=false
+                '''
+            }
+            post {
+                always {
+                    junit testResults: 'target/surefire-reports/*.xml', allowEmptyResults: true
+                }
+            }
+        }
+
+        stage('Docker Image Build') {
+            steps {
+                echo "Building Docker image for cinema-app..."
+                sh 'docker compose build cinema-app'
+            }
+        }
+
+        stage('Stop Old Containers') {
+            steps {
+                echo "Stopping existing containers (if any)..."
+                sh 'docker compose down || true'
+            }
+        }
+
+        stage('Deploy (Docker Compose Up)') {
+            steps {
+                echo "Starting all services via docker compose..."
+                sh 'docker compose up -d'
+            }
+        }
+
+        stage('Health Check') {
+            steps {
+                echo "Waiting for application to become healthy..."
+                sh '''
+                    sleep 15
+                    docker compose ps
+                    curl -f http://localhost:8081/actuator/health || echo "Health check failed, please inspect logs"
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Pipeline completed successfully. cinema-app is up and running."
+        }
+        failure {
+            echo "Pipeline failed. Showing recent logs for debugging..."
+            sh 'docker compose logs --tail=100 cinema-app || true'
+        }
+        always {
+            echo "Pipeline finished at ${new Date()}"
+        }
+    }
+}
