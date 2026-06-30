@@ -10,7 +10,7 @@ COPY src src
 RUN chmod +x mvnw && \
     ./mvnw clean package -DskipTests
 
-FROM openjdk:21-jdk-slim
+FROM eclipse-temurin:21-jdk-alpine
 
 WORKDIR /app
 
